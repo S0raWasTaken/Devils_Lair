@@ -18,7 +18,11 @@ pub async fn post_command(
     _: &str,
     result: Result<(), CommandError>,
 ) {
-    println!("Successful command from {}: {}", message.author.tag(), message.content);
+    println!(
+        "Successful command from {}: {}",
+        message.author.tag(),
+        message.content
+    );
     if let Err(why) = result {
         message
             .reply_ping(&ctx.http, why.to_string().to_code_block("yml"))
