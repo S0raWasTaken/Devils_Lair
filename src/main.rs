@@ -11,7 +11,7 @@ use serenity::{
     Client,
 };
 
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 struct Handler;
 
@@ -28,6 +28,7 @@ struct Console;
 
 mod commands;
 mod hooks;
+mod util;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -55,7 +56,7 @@ async fn main() -> Result<()> {
         .await?;
 
     if let Err(why) = client.start().await {
-        eprintln!("{}", why);
+        eprintln!("{why}");
     }
 
     Ok(())

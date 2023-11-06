@@ -8,6 +8,8 @@ use serenity::{
 };
 use std::env::var;
 
+use crate::util::ToErrorContext;
+
 const COMMANDS: &str = "\
 - **`status`**
 - **`start`**
@@ -23,13 +25,35 @@ async fn status(ctx: &Context, msg: &Message) -> CommandResult {
     let api_key = var("API_KEY")?;
     let server_id = var("SERVER_ID")?;
 
-    let request = Client::new()
+    let req_address = Client::new()
+        .get(format!("{api_url}/client/servers/{server_id}"))
+        .header("Accept", "application/json")
+        .header("Content-Type", "application/json")
+        .header("Authorization", &format!("Bearer {api_key}"));
+
+    let address = &req_address
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap()["attributes"]["relationships"]["allocations"]["data"][0]["attributes"];
+
+    let ip = format!(
+        "{}:{}",
+        address["ip"].as_str().ok_or("Tá faltando info no ip")?,
+        address["port"]
+            .as_u64()
+            .ok_or("Tá faltando info na porta")?
+    );
+
+    let req_resources = Client::new()
         .get(format!("{api_url}/client/servers/{server_id}/resources"))
         .header("Accept", "application/json")
         .header("Content-Type", "application/json")
         .header("Authorization", &format!("Bearer {api_key}"));
 
-    let res = request.send().await?.json::<Value>().await?;
+    let res = &req_resources.send().await?.json::<Value>().await?;
 
     let attributes = &res["attributes"];
     let resources = &attributes["resources"];
@@ -37,23 +61,23 @@ async fn status(ctx: &Context, msg: &Message) -> CommandResult {
     let (days, hours, mins, _) = format_dhms(
         res["attributes"]["resources"]["uptime"]
             .as_u64()
-            .ok_or("Tá faltando info de tempo na API, resolve aqui <@319637457907875841>")?
+            .to_error_context("Tá faltando info de tempo na API", res)?
             / 1000,
     );
 
     let current_state = attributes["current_state"]
         .as_str()
-        .ok_or("Tá faltando o estado do servidor <@319637457907875841>")?;
+        .to_error_context("Tá faltando o estado do servidor", res)?;
     let cpu_absolute = resources["cpu_absolute"]
         .as_f64()
-        .ok_or("Não tem info da cpu <@319637457907875841>")?;
+        .to_error_context("Não tem info da cpu", res)?;
     let memory_bytes = resources["memory_bytes"]
         .as_f64()
-        .ok_or("Sem info na ram <@319637457907875841>")?
+        .to_error_context("Sem info na ram", res)?
         / 1_000_000_000.0;
     let disk_bytes = resources["disk_bytes"]
         .as_f64()
-        .ok_or("Sem info no disco <@319637457907875841>")?
+        .to_error_context("Sem info no disco", res)?
         / 1_000_000_000.0;
 
     let description = format!(
@@ -73,6 +97,9 @@ async fn status(ctx: &Context, msg: &Message) -> CommandResult {
             .color(Color::FABLED_PINK)
             .description(description)
             .thumbnail("https://cdn.discordapp.com/attachments/725013161886875678/1151579930891669514/server-icon.png")
+            .footer(|e| {
+                e.text(ip)
+            })
         })
     }).await?;
 

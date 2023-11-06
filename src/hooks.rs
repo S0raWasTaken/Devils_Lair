@@ -24,10 +24,16 @@ pub async fn post_command(
         message.content
     );
     if let Err(why) = result {
-        message
-            .reply_ping(&ctx.http, why.to_string().to_code_block("yml"))
-            .await
-            .ok();
+        let why = why.to_string();
+        let error_context = why.split(" ><>< ").collect::<Vec<_>>();
+        let (generic, context) = (error_context[0], error_context[1]);
+
+        let content = format!(
+            "{}\nContexto: ```json\n{context}```",
+            generic.to_string().to_code_block("yml")
+        );
+
+        message.reply_ping(&ctx.http, content).await.ok();
     }
 }
 
